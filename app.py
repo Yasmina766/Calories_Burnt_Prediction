@@ -1,77 +1,224 @@
 import streamlit as st
-import pandas as pd
 import numpy as np
-import plotly.express as px
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
-
+import pandas as pd
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import LabelEncoder, StandardScaler
+from sklearn.metrics import mean_absolute_error
 from sklearn.linear_model import LinearRegression, Lasso, Ridge
 from sklearn.ensemble import RandomForestRegressor
-from sklearn.metrics import mean_absolute_error, r2_score
 from xgboost import XGBRegressor
-
 import warnings
-warnings.filterwarnings("ignore")
+warnings.filterwarnings('ignore')
 
-# ─── Page Config ────────────────────────────────────────────────────────────────
+# ── Page config ────────────────────────────────────────────────────────────────
 st.set_page_config(
-    page_title="Calories Burnt Prediction",
+    page_title="Calories Burnt Predictor",
     page_icon="🔥",
     layout="wide",
-    initial_sidebar_state="expanded",
 )
 
-# ─── Custom CSS ─────────────────────────────────────────────────────────────────
+# ── Custom CSS ─────────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
-    .main { background-color: #0e1117; }
-    .metric-card {
-        background: linear-gradient(135deg, #1e2130, #252a3a);
-        border: 1px solid #2e3450;
-        border-radius: 12px;
-        padding: 20px;
-        text-align: center;
-        margin-bottom: 10px;
-    }
-    .metric-card h3 { color: #a0aec0; font-size: 0.85rem; margin: 0; }
-    .metric-card h1 { color: #f6ad55; font-size: 2rem; margin: 4px 0 0; }
-    .algo-card {
-        background: linear-gradient(135deg, #1a1f2e, #1e2436);
-        border: 1px solid #2d3556;
-        border-radius: 10px;
-        padding: 16px;
-        margin-bottom: 10px;
-    }
-    .algo-title { color: #63b3ed; font-weight: bold; font-size: 1rem; }
-    .algo-desc  { color: #718096; font-size: 0.82rem; margin-top: 4px; }
-    .section-header {
-        font-size: 1.4rem;
-        font-weight: 700;
-        color: #f6ad55;
-        border-left: 4px solid #f6ad55;
-        padding-left: 12px;
-        margin: 24px 0 16px;
-    }
-    .stTabs [data-baseweb="tab"] { color: #a0aec0; }
-    .stTabs [aria-selected="true"] { color: #f6ad55 !important; border-bottom-color: #f6ad55 !important; }
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap');
+
+html, body, [class*="css"] {
+    font-family: 'Space Grotesk', sans-serif;
+}
+
+.stApp {
+    background: #0a0a0f;
+    color: #e8e8f0;
+}
+
+/* Header */
+.hero-title {
+    font-size: 3rem;
+    font-weight: 700;
+    background: linear-gradient(135deg, #ff6b35, #f7931e, #ff6b35);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    letter-spacing: -1px;
+    margin-bottom: 0;
+}
+
+.hero-sub {
+    color: #888;
+    font-size: 1rem;
+    margin-top: 4px;
+    font-weight: 300;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+}
+
+/* Cards */
+.metric-card {
+    background: #13131a;
+    border: 1px solid #222233;
+    border-radius: 16px;
+    padding: 20px 24px;
+    margin-bottom: 12px;
+    transition: border-color 0.2s;
+}
+.metric-card:hover { border-color: #ff6b35; }
+.metric-card .label {
+    font-size: 0.7rem;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: #666;
+    margin-bottom: 6px;
+}
+.metric-card .value {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 1.6rem;
+    font-weight: 700;
+    color: #ff6b35;
+}
+.metric-card .sub {
+    font-size: 0.75rem;
+    color: #555;
+    margin-top: 2px;
+}
+
+/* Algorithm pill */
+.algo-badge {
+    display: inline-block;
+    background: #1a1a28;
+    border: 1px solid #ff6b35;
+    color: #ff6b35;
+    border-radius: 20px;
+    padding: 3px 12px;
+    font-size: 0.78rem;
+    font-family: 'JetBrains Mono', monospace;
+    margin-bottom: 16px;
+}
+
+/* Result big number */
+.result-box {
+    background: linear-gradient(135deg, #1a0d05, #1f1200);
+    border: 2px solid #ff6b35;
+    border-radius: 20px;
+    padding: 32px;
+    text-align: center;
+}
+.result-box .kcal-value {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 4rem;
+    font-weight: 700;
+    color: #ff6b35;
+    line-height: 1;
+}
+.result-box .kcal-unit {
+    font-size: 1.2rem;
+    color: #888;
+    margin-top: 6px;
+}
+.result-box .result-label {
+    font-size: 0.7rem;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: #555;
+    margin-bottom: 12px;
+}
+
+/* Comparison table */
+.cmp-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 16px;
+    border-radius: 10px;
+    margin-bottom: 8px;
+    background: #13131a;
+    border: 1px solid #1e1e2e;
+    font-size: 0.9rem;
+}
+.cmp-row.best {
+    border-color: #ff6b35;
+    background: #1a1005;
+}
+.cmp-bar-wrap {
+    flex: 1;
+    margin: 0 16px;
+    background: #1e1e2e;
+    border-radius: 4px;
+    height: 6px;
+    overflow: hidden;
+}
+.cmp-bar {
+    height: 100%;
+    border-radius: 4px;
+    background: linear-gradient(90deg, #ff6b35, #f7931e);
+}
+.cmp-mae {
+    font-family: 'JetBrains Mono', monospace;
+    color: #aaa;
+    font-size: 0.8rem;
+    width: 70px;
+    text-align: right;
+}
+.cmp-algo {
+    width: 160px;
+    font-size: 0.8rem;
+}
+
+/* Sidebar inputs */
+section[data-testid="stSidebar"] {
+    background: #0d0d14;
+    border-right: 1px solid #1e1e2e;
+}
+section[data-testid="stSidebar"] .stSlider > div > div {
+    color: #ff6b35;
+}
+
+/* Streamlit overrides */
+.stSelectbox > div > div {
+    background: #13131a;
+    border: 1px solid #2a2a3e;
+    border-radius: 10px;
+    color: #e8e8f0;
+}
+.stButton > button {
+    background: linear-gradient(135deg, #ff6b35, #f7931e);
+    color: #000;
+    font-weight: 700;
+    border: none;
+    border-radius: 12px;
+    padding: 12px 32px;
+    font-size: 1rem;
+    letter-spacing: 0.5px;
+    font-family: 'Space Grotesk', sans-serif;
+    width: 100%;
+    cursor: pointer;
+    transition: opacity 0.2s;
+}
+.stButton > button:hover { opacity: 0.85; }
+hr { border-color: #1e1e2e; }
+
+div[data-testid="stMetric"] {
+    background: #13131a;
+    border: 1px solid #222233;
+    border-radius: 12px;
+    padding: 12px 16px;
+}
 </style>
 """, unsafe_allow_html=True)
 
-# ─── Load & Prepare Data ────────────────────────────────────────────────────────
-@st.cache_data
-def load_data():
-    cal = pd.read_csv("calories.csv")
-    ex  = pd.read_csv("exercise.csv")
-    df  = ex.merge(cal, on="User_ID")
-    df.replace({"male": 0, "female": 1}, inplace=True)
-    # Drop highly correlated features (same as notebook: Weight & Duration)
-    df.drop(columns=["Weight", "Duration"], inplace=True)
-    return df
 
-@st.cache_data
-def train_models(df):
+# ── Data loading & model training ─────────────────────────────────────────────
+@st.cache_resource(show_spinner="⚙️  Training models on your data…")
+def load_and_train():
+    calories = pd.read_csv("calories.csv")
+    exercise = pd.read_csv("exercise.csv")
+    df = exercise.merge(calories, on="User_ID")
+
+    le = LabelEncoder()
+    df["Gender"] = le.fit_transform(df["Gender"])   # male=1, female=0
+
+    to_remove = ["Weight", "Duration"]
+    df.drop(to_remove, axis=1, inplace=True)
+
     features = df.drop(["User_ID", "Calories"], axis=1)
     target   = df["Calories"].values
 
@@ -80,334 +227,184 @@ def train_models(df):
     )
 
     scaler  = StandardScaler()
-    Xs_train = scaler.fit_transform(X_train)
-    Xs_val   = scaler.transform(X_val)
+    Xtr     = scaler.fit_transform(X_train)
+    Xvl     = scaler.transform(X_val)
 
-    model_defs = {
-        "Linear Regression": LinearRegression(),
-        "Lasso":             Lasso(),
-        "Ridge":             Ridge(),
-        "Random Forest":     RandomForestRegressor(random_state=42),
-        "XGBoost":           XGBRegressor(verbosity=0, random_state=42),
+    algos = {
+        "Linear Regression":    LinearRegression(),
+        "Lasso":                Lasso(),
+        "Ridge":                Ridge(),
+        "Random Forest":        RandomForestRegressor(n_estimators=100, random_state=42),
+        "XGBoost":              XGBRegressor(n_estimators=100, random_state=42),
     }
 
     results = {}
-    for name, mdl in model_defs.items():
-        mdl.fit(Xs_train, y_train)
-        tr_pred  = mdl.predict(Xs_train)
-        val_pred = mdl.predict(Xs_val)
+    for name, mdl in algos.items():
+        mdl.fit(Xtr, y_train)
+        train_mae = mae(y_train, mdl.predict(Xtr))
+        val_mae   = mae(y_val,   mdl.predict(Xvl))
         results[name] = {
-            "model":       mdl,
-            "scaler":      scaler,
-            "train_mae":   mae_score(y_train, tr_pred),
-            "val_mae":     mae_score(y_val,   val_pred),
-            "train_r2":    r2_score(y_train,  tr_pred),
-            "val_r2":      r2_score(y_val,    val_pred),
-            "val_pred":    val_pred,
-            "y_val":       y_val,
+            "model":     mdl,
+            "train_mae": train_mae,
+            "val_mae":   val_mae,
         }
-    return results, features.columns.tolist()
 
-def mae_score(y_true, y_pred):
+    feature_names = list(features.columns)
+    return results, scaler, feature_names, df
+
+
+def mae(y_true, y_pred):
     return mean_absolute_error(y_true, y_pred)
 
-# ─── Descriptions for each algorithm ────────────────────────────────────────────
-ALGO_INFO = {
-    "Linear Regression": {
-        "desc": "يجد أفضل خط مستقيم يصف العلاقة بين المتغيرات والسعرات المحروقة.",
-        "pros": "سريع، سهل التفسير، يعمل بشكل ممتاز على البيانات الخطية.",
-        "cons": "لا يلتقط العلاقات غير الخطية.",
-        "color": "#4299e1",
-    },
-    "Lasso": {
-        "desc": "Regularized Linear Regression تُضيف عقوبة L1 لتقليل التعقيد وانتقاء المتغيرات تلقائياً.",
-        "pros": "يُلغي المتغيرات الضعيفة تلقائياً، يقلل الـ overfitting.",
-        "cons": "قد يُفرط في حذف بعض المتغيرات المفيدة.",
-        "color": "#9f7aea",
-    },
-    "Ridge": {
-        "desc": "Regularized Linear Regression تُضيف عقوبة L2 لتوزيع الأوزان بشكل متوازن.",
-        "pros": "يعالج الـ multicollinearity بشكل ممتاز.",
-        "cons": "لا يُلغي المتغيرات، يحتفظ بها جميعاً بأوزان صغيرة.",
-        "color": "#ed64a6",
-    },
-    "Random Forest": {
-        "desc": "مجموعة من أشجار القرار تعمل معاً وتتوسط نتائجها لتحسين الدقة.",
-        "pros": "دقيق جداً، يتعامل مع العلاقات غير الخطية، مقاوم لـ overfitting.",
-        "cons": "بطيء في التدريب، صعب التفسير.",
-        "color": "#48bb78",
-    },
-    "XGBoost": {
-        "desc": "Gradient Boosting متطور يبني نماذج متتالية كل منها يصحح أخطاء السابق.",
-        "pros": "من أقوى الخوارزميات، سريع، يتعامل مع القيم المفقودة.",
-        "cons": "يحتاج ضبط دقيق لـ hyperparameters.",
-        "color": "#f6ad55",
-    },
-}
 
-# ─── Main App ───────────────────────────────────────────────────────────────────
-def main():
-    # ── Header
-    st.markdown("""
-    <div style="text-align:center; padding: 20px 0 10px;">
-        <h1 style="font-size:2.6rem; color:#f6ad55; margin:0;">🔥 Calories Burnt Prediction</h1>
-        <p style="color:#718096; font-size:1rem; margin-top:6px;">
-            Machine Learning Dashboard — تحليل وتوقع السعرات الحرارية المحروقة أثناء التمرين
-        </p>
+# ── Load ───────────────────────────────────────────────────────────────────────
+try:
+    results, scaler, feature_names, df = load_and_train()
+    data_loaded = True
+except FileNotFoundError:
+    data_loaded = False
+
+
+# ── Header ─────────────────────────────────────────────────────────────────────
+col_title, col_status = st.columns([3, 1])
+with col_title:
+    st.markdown('<p class="hero-title">🔥 CalorieSense</p>', unsafe_allow_html=True)
+    st.markdown('<p class="hero-sub">Calories Burnt Prediction · ML Algorithm Benchmark</p>', unsafe_allow_html=True)
+
+st.markdown("---")
+
+if not data_loaded:
+    st.error("❌  Could not find **calories.csv** and **exercise.csv** — make sure they're in the same folder as `app.py`.")
+    st.stop()
+
+# ── Sidebar ────────────────────────────────────────────────────────────────────
+with st.sidebar:
+    st.markdown("### ⚙️ Your Profile")
+    st.markdown("---")
+
+    gender   = st.selectbox("Gender", ["Male", "Female"])
+    age      = st.slider("Age",        10, 80, 25)
+    height   = st.slider("Height (cm)", 140, 210, 170)
+    heart_rate = st.slider("Heart Rate (bpm)", 60, 130, 90)
+    body_temp  = st.slider("Body Temp (°C)",   37.0, 42.0, 39.5, step=0.1)
+
+    st.markdown("---")
+    st.markdown("### 🤖 Algorithm")
+    selected_algo = st.selectbox(
+        "Choose model",
+        list(results.keys()),
+        index=4,   # XGBoost default
+    )
+    st.markdown("---")
+    predict_btn = st.button("🔥 Predict Calories")
+
+# ── Main layout ────────────────────────────────────────────────────────────────
+left, right = st.columns([1, 1], gap="large")
+
+# ── LEFT: Prediction ───────────────────────────────────────────────────────────
+with left:
+    st.markdown("#### Prediction")
+
+    gender_enc = 1 if gender == "Male" else 0
+    # feature order: Gender, Age, Height, Heart_Rate, Body_Temp
+    user_input = np.array([[gender_enc, age, height, heart_rate, body_temp]])
+    user_scaled = scaler.transform(user_input)
+
+    model = results[selected_algo]["model"]
+    prediction = max(0, model.predict(user_scaled)[0])
+
+    st.markdown(f'<div class="algo-badge">{selected_algo}</div>', unsafe_allow_html=True)
+
+    st.markdown(f"""
+    <div class="result-box">
+        <div class="result-label">Estimated Calories Burnt</div>
+        <div class="kcal-value">{prediction:.0f}</div>
+        <div class="kcal-unit">kcal</div>
     </div>
-    <hr style="border-color:#2d3556; margin-bottom:24px;">
     """, unsafe_allow_html=True)
 
-    # ── Load
-    with st.spinner("جاري تحميل البيانات وتدريب النماذج…"):
-        df      = load_data()
-        results, feature_cols = train_models(df)
+    st.markdown("<br>", unsafe_allow_html=True)
 
-    # ── Sidebar — Prediction Panel
-    st.sidebar.markdown("## 🎯 توقع السعرات المحروقة")
-    st.sidebar.markdown("أدخل بيانات التمرين للحصول على توقع فوري.")
+    # Input summary cards
+    pairs = [
+        ("Gender",      gender,                    ""),
+        ("Age",         f"{age}",                  "years"),
+        ("Height",      f"{height}",               "cm"),
+        ("Heart Rate",  f"{heart_rate}",            "bpm"),
+        ("Body Temp",   f"{body_temp:.1f}",         "°C"),
+    ]
+    c1, c2 = st.columns(2)
+    for i, (label, val, unit) in enumerate(pairs):
+        col = c1 if i % 2 == 0 else c2
+        with col:
+            st.markdown(f"""
+            <div class="metric-card">
+                <div class="label">{label}</div>
+                <div class="value">{val}</div>
+                <div class="sub">{unit}</div>
+            </div>
+            """, unsafe_allow_html=True)
 
-    gender     = st.sidebar.selectbox("الجنس", ["ذكر", "أنثى"])
-    age        = st.sidebar.slider("العمر", 18, 79, 30)
-    height     = st.sidebar.slider("الطول (سم)", 120, 220, 170)
-    heart_rate = st.sidebar.slider("معدل ضربات القلب", 50, 180, 100)
-    body_temp  = st.sidebar.slider("درجة حرارة الجسم (°C)", 36.0, 42.0, 38.5, step=0.1)
+# ── RIGHT: Algorithm comparison ────────────────────────────────────────────────
+with right:
+    st.markdown("#### Algorithm Benchmark")
+    st.markdown('<span style="color:#555;font-size:0.8rem;">Validation MAE — lower is better</span>', unsafe_allow_html=True)
+    st.markdown("<br>", unsafe_allow_html=True)
 
-    sel_model = st.sidebar.selectbox("اختر النموذج", list(results.keys()))
+    max_mae = max(v["val_mae"] for v in results.values())
+    sorted_algos = sorted(results.items(), key=lambda x: x[1]["val_mae"])
 
-    if st.sidebar.button("🔥 احسب السعرات", use_container_width=True):
-        gender_val = 1 if gender == "أنثى" else 0
-        inp = np.array([[gender_val, age, height, heart_rate, body_temp]])
-        mdl_data = results[sel_model]
-        inp_scaled = mdl_data["scaler"].transform(inp)
-        pred = mdl_data["model"].predict(inp_scaled)[0]
-        st.sidebar.markdown(f"""
-        <div style="background:linear-gradient(135deg,#2d1b0e,#3d2510);
-                    border:1px solid #f6ad55; border-radius:12px; padding:20px; text-align:center; margin-top:16px;">
-            <p style="color:#f6ad55;font-size:0.9rem;margin:0;">السعرات المحروقة المتوقعة</p>
-            <h1 style="color:#fff;font-size:2.8rem;margin:4px 0;">{pred:.1f}</h1>
-            <p style="color:#a0aec0;font-size:0.8rem;margin:0;">سعرة حرارية 🔥</p>
+    for name, info in sorted_algos:
+        val_mae   = info["val_mae"]
+        train_mae = info["train_mae"]
+        bar_pct   = (1 - val_mae / max_mae) * 100
+        is_best   = name == sorted_algos[0][0]
+        is_sel    = name == selected_algo
+        badge     = " 🏆" if is_best else (" ◀" if is_sel else "")
+        row_cls   = "cmp-row best" if is_best else "cmp-row"
+
+        st.markdown(f"""
+        <div class="{row_cls}">
+            <div class="cmp-algo">{name}{badge}</div>
+            <div class="cmp-bar-wrap">
+                <div class="cmp-bar" style="width:{bar_pct:.1f}%"></div>
+            </div>
+            <div class="cmp-mae">{val_mae:.2f}</div>
         </div>
         """, unsafe_allow_html=True)
 
-    # ── Tabs
-    tab1, tab2, tab3, tab4 = st.tabs([
-        "📊 نظرة عامة على البيانات",
-        "🤖 الخوارزميات",
-        "📈 مقارنة الأداء",
-        "🔍 تحليل التوقعات",
-    ])
+    st.markdown("<br>", unsafe_allow_html=True)
 
-    # ══════════════════════════════════════════════════════════
-    # TAB 1 — Data Overview
-    # ══════════════════════════════════════════════════════════
-    with tab1:
-        st.markdown('<div class="section-header">إحصائيات البيانات</div>', unsafe_allow_html=True)
+    # Detailed stats for selected model
+    sel = results[selected_algo]
+    st.markdown(f"**{selected_algo} — Detailed Stats**")
+    m1, m2 = st.columns(2)
+    m1.metric("Train MAE", f"{sel['train_mae']:.2f} kcal")
+    m2.metric("Val MAE",   f"{sel['val_mae']:.2f} kcal")
 
-        col1, col2, col3, col4 = st.columns(4)
-        for col, label, val in zip(
-            [col1, col2, col3, col4],
-            ["عدد السجلات", "المتغيرات", "متوسط السعرات", "الحد الأقصى للسعرات"],
-            [len(df), len(feature_cols), f"{df['Calories'].mean():.1f}", f"{df['Calories'].max():.0f}"],
-        ):
-            col.markdown(f"""
-            <div class="metric-card">
-                <h3>{label}</h3><h1>{val}</h1>
-            </div>""", unsafe_allow_html=True)
+    overfit_gap = sel["train_mae"] - sel["val_mae"]
+    if abs(overfit_gap) < 2:
+        fit_note = "✅ Well-generalised"
+    elif overfit_gap < 0:
+        fit_note = "⚠️ Slight underfitting"
+    else:
+        fit_note = "⚠️ Signs of overfitting"
+    st.caption(fit_note)
 
-        st.markdown('<div class="section-header">توزيع البيانات</div>', unsafe_allow_html=True)
-        col_a, col_b = st.columns(2)
+st.markdown("---")
 
-        with col_a:
-            # Calories distribution
-            fig = px.histogram(df, x="Calories", nbins=50, title="توزيع السعرات المحروقة",
-                               color_discrete_sequence=["#f6ad55"])
-            fig.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)",
-                              plot_bgcolor="rgba(0,0,0,0)")
-            st.plotly_chart(fig, use_container_width=True)
+# ── Dataset overview ──────────────────────────────────────────────────────────
+with st.expander("📊 Dataset Overview"):
+    st.markdown(f"**{len(df):,} records** · 5 features after preprocessing")
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Avg Calories",    f"{df['Calories'].mean():.0f} kcal")
+    c2.metric("Min Calories",    f"{df['Calories'].min():.0f} kcal")
+    c3.metric("Max Calories",    f"{df['Calories'].max():.0f} kcal")
+    c4.metric("Std Dev",         f"{df['Calories'].std():.0f} kcal")
+    st.dataframe(df.drop("User_ID", axis=1).describe().round(2), use_container_width=True)
 
-        with col_b:
-            # Gender pie
-            original_ex = pd.read_csv("exercise.csv")
-            gender_counts = original_ex["Gender"].value_counts()
-            fig2 = px.pie(values=gender_counts.values,
-                          names=["ذكر" if g == "male" else "أنثى" for g in gender_counts.index],
-                          title="توزيع الجنس", color_discrete_sequence=["#63b3ed", "#f687b3"])
-            fig2.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)")
-            st.plotly_chart(fig2, use_container_width=True)
-
-        st.markdown('<div class="section-header">العلاقة بين المتغيرات والسعرات</div>', unsafe_allow_html=True)
-        sample = df.sample(min(1000, len(df)), random_state=1)
-        feat_options = ["Age", "Height", "Heart_Rate", "Body_Temp"]
-        fig3 = make_subplots(rows=2, cols=2,
-                             subplot_titles=["العمر", "الطول", "معدل القلب", "حرارة الجسم"])
-        colors = ["#4299e1", "#9f7aea", "#48bb78", "#f6ad55"]
-        for i, (feat, clr) in enumerate(zip(feat_options, colors)):
-            r, c = divmod(i, 2)
-            fig3.add_trace(
-                go.Scatter(x=sample[feat], y=sample["Calories"], mode="markers",
-                           marker=dict(color=clr, size=4, opacity=0.5),
-                           name=feat),
-                row=r+1, col=c+1,
-            )
-        fig3.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)",
-                           plot_bgcolor="rgba(0,0,0,0)", height=500, showlegend=False)
-        st.plotly_chart(fig3, use_container_width=True)
-
-        st.markdown('<div class="section-header">عينة من البيانات</div>', unsafe_allow_html=True)
-        display_df = df.copy()
-        display_df["Gender"] = display_df["Gender"].map({0: "ذكر", 1: "أنثى"})
-        st.dataframe(display_df.head(10), use_container_width=True)
-
-    # ══════════════════════════════════════════════════════════
-    # TAB 2 — Algorithms
-    # ══════════════════════════════════════════════════════════
-    with tab2:
-        st.markdown('<div class="section-header">الخوارزميات المستخدمة في المشروع</div>',
-                    unsafe_allow_html=True)
-
-        for name, info in ALGO_INFO.items():
-            r = results[name]
-            col_left, col_right = st.columns([2, 1])
-            with col_left:
-                st.markdown(f"""
-                <div class="algo-card">
-                    <div class="algo-title" style="color:{info['color']};">⚡ {name}</div>
-                    <div class="algo-desc">{info['desc']}</div>
-                    <div style="margin-top:10px; display:flex; gap:20px; flex-wrap:wrap;">
-                        <span style="color:#48bb78; font-size:0.8rem;">✅ {info['pros']}</span>
-                        <span style="color:#fc8181; font-size:0.8rem;">⚠️ {info['cons']}</span>
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
-            with col_right:
-                st.markdown(f"""
-                <div style="background:rgba(255,255,255,0.03); border:1px solid #2d3556;
-                            border-radius:10px; padding:14px; text-align:center; margin-top:4px;">
-                    <p style="color:#a0aec0;font-size:0.75rem;margin:0;">Validation MAE</p>
-                    <h2 style="color:{info['color']};margin:4px 0;">{r['val_mae']:.2f}</h2>
-                    <p style="color:#a0aec0;font-size:0.75rem;margin:0;">R² Score</p>
-                    <h2 style="color:{info['color']};margin:4px 0;">{r['val_r2']:.4f}</h2>
-                </div>
-                """, unsafe_allow_html=True)
-
-    # ══════════════════════════════════════════════════════════
-    # TAB 3 — Performance Comparison
-    # ══════════════════════════════════════════════════════════
-    with tab3:
-        st.markdown('<div class="section-header">مقارنة أداء الخوارزميات</div>', unsafe_allow_html=True)
-
-        names      = list(results.keys())
-        train_maes = [results[n]["train_mae"] for n in names]
-        val_maes   = [results[n]["val_mae"]   for n in names]
-        val_r2s    = [results[n]["val_r2"]    for n in names]
-        colors_list = [ALGO_INFO[n]["color"]  for n in names]
-
-        col1, col2 = st.columns(2)
-        with col1:
-            fig_mae = go.Figure()
-            fig_mae.add_trace(go.Bar(name="Training MAE", x=names, y=train_maes,
-                                     marker_color="#63b3ed"))
-            fig_mae.add_trace(go.Bar(name="Validation MAE", x=names, y=val_maes,
-                                     marker_color="#f6ad55"))
-            fig_mae.update_layout(title="Mean Absolute Error (MAE) — Training vs Validation",
-                                  barmode="group", template="plotly_dark",
-                                  paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-                                  yaxis_title="MAE (Calories)", xaxis_tickangle=-15)
-            st.plotly_chart(fig_mae, use_container_width=True)
-
-        with col2:
-            fig_r2 = go.Figure(go.Bar(x=names, y=val_r2s, marker_color=colors_list,
-                                      text=[f"{v:.4f}" for v in val_r2s],
-                                      textposition="outside"))
-            fig_r2.update_layout(title="R² Score (Validation) — كلما اقترب من 1 كلما كان أفضل",
-                                 template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)",
-                                 plot_bgcolor="rgba(0,0,0,0)",
-                                 yaxis=dict(title="R² Score", range=[0, 1.1]),
-                                 xaxis_tickangle=-15)
-            st.plotly_chart(fig_r2, use_container_width=True)
-
-        # Summary table
-        st.markdown('<div class="section-header">جدول ملخص النتائج</div>', unsafe_allow_html=True)
-        summary = pd.DataFrame({
-            "الخوارزمية":      names,
-            "Train MAE":      [f"{results[n]['train_mae']:.3f}" for n in names],
-            "Validation MAE": [f"{results[n]['val_mae']:.3f}"   for n in names],
-            "Train R²":       [f"{results[n]['train_r2']:.4f}"  for n in names],
-            "Validation R²":  [f"{results[n]['val_r2']:.4f}"   for n in names],
-        })
-        st.dataframe(summary, use_container_width=True, hide_index=True)
-
-        # Best model callout
-        best = min(results, key=lambda n: results[n]["val_mae"])
-        st.success(f"🏆 أفضل نموذج بناءً على Validation MAE: **{best}** "
-                   f"(MAE = {results[best]['val_mae']:.3f})")
-
-    # ══════════════════════════════════════════════════════════
-    # TAB 4 — Prediction Analysis
-    # ══════════════════════════════════════════════════════════
-    with tab4:
-        st.markdown('<div class="section-header">تحليل التوقعات مقابل القيم الحقيقية</div>',
-                    unsafe_allow_html=True)
-
-        sel = st.selectbox("اختر النموذج لعرض التحليل", list(results.keys()), key="tab4_sel")
-        r   = results[sel]
-
-        col1, col2 = st.columns(2)
-        with col1:
-            # Actual vs Predicted scatter
-            fig_sc = px.scatter(x=r["y_val"], y=r["val_pred"],
-                                labels={"x": "القيمة الحقيقية", "y": "القيمة المتوقعة"},
-                                title=f"{sel} — Actual vs Predicted",
-                                color_discrete_sequence=[ALGO_INFO[sel]["color"]],
-                                opacity=0.6)
-            max_val = max(r["y_val"].max(), r["val_pred"].max())
-            fig_sc.add_shape(type="line", x0=0, y0=0, x1=max_val, y1=max_val,
-                             line=dict(color="white", dash="dash"))
-            fig_sc.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)",
-                                 plot_bgcolor="rgba(0,0,0,0)")
-            st.plotly_chart(fig_sc, use_container_width=True)
-
-        with col2:
-            # Residuals
-            residuals = r["y_val"] - r["val_pred"]
-            fig_res = px.histogram(x=residuals, nbins=40, title="توزيع الأخطاء (Residuals)",
-                                   color_discrete_sequence=[ALGO_INFO[sel]["color"]])
-            fig_res.add_vline(x=0, line_dash="dash", line_color="white")
-            fig_res.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)",
-                                  plot_bgcolor="rgba(0,0,0,0)",
-                                  xaxis_title="Error (Actual − Predicted)",
-                                  yaxis_title="Count")
-            st.plotly_chart(fig_res, use_container_width=True)
-
-        # Feature importance (Random Forest & XGBoost only)
-        if sel in ("Random Forest", "XGBoost"):
-            st.markdown('<div class="section-header">أهمية المتغيرات (Feature Importance)</div>',
-                        unsafe_allow_html=True)
-            importances = r["model"].feature_importances_
-            fi_df = pd.DataFrame({"Feature": feature_cols, "Importance": importances})
-            fi_df = fi_df.sort_values("Importance", ascending=True)
-            fig_fi = px.bar(fi_df, x="Importance", y="Feature", orientation="h",
-                            title=f"{sel} — Feature Importance",
-                            color="Importance",
-                            color_continuous_scale=["#2d3556", ALGO_INFO[sel]["color"]])
-            fig_fi.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)",
-                                 plot_bgcolor="rgba(0,0,0,0)", showlegend=False,
-                                 coloraxis_showscale=False)
-            st.plotly_chart(fig_fi, use_container_width=True)
-        else:
-            st.info(f"ℹ️ Feature Importance متاحة فقط لـ Random Forest و XGBoost."
-                    f" اختر أحدهما لرؤية أهمية المتغيرات.")
-
-    # ── Footer
-    st.markdown("""
-    <hr style="border-color:#2d3556; margin-top:40px;">
-    <p style="text-align:center; color:#4a5568; font-size:0.8rem;">
-        🔥 Calories Burnt Prediction Dashboard | 
-        Algorithms: Linear Regression · Lasso · Ridge · Random Forest · XGBoost
-    </p>
-    """, unsafe_allow_html=True)
-
-
-if __name__ == "__main__":
-    main()
+st.markdown(
+    '<p style="text-align:center;color:#333;font-size:0.75rem;margin-top:24px;">'
+    'CalorieSense · Built with Streamlit & scikit-learn</p>',
+    unsafe_allow_html=True
+)
