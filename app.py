@@ -1,10 +1,11 @@
 import streamlit as st
 import numpy as np
 import pandas as pd
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import LabelEncoder, StandardScaler
+from sklearn.model_selection import train_test_split, cross_val_score
+from sklearn.preprocessing import StandardScaler
 from sklearn.linear_model import LinearRegression, Lasso, Ridge
 from sklearn.ensemble import RandomForestRegressor
+from sklearn.metrics import mean_absolute_error
 from xgboost import XGBRegressor
 import warnings
 warnings.filterwarnings("ignore")
@@ -176,6 +177,54 @@ html, body, [class*="css"] {
     font-weight: 700;
 }
 
+/* Best algo badge */
+.best-badge {
+    display: inline-block;
+    background: linear-gradient(135deg, rgba(104,211,145,0.2), rgba(56,178,172,0.2));
+    border: 1px solid rgba(104,211,145,0.5);
+    color: #68d391;
+    border-radius: 20px;
+    padding: 0.15rem 0.6rem;
+    font-size: 0.7rem;
+    font-weight: 700;
+    margin-left: 0.5rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+/* Best algo info card */
+.best-algo-card {
+    background: linear-gradient(135deg, rgba(104,211,145,0.1), rgba(56,178,172,0.1));
+    border: 1px solid rgba(104,211,145,0.3);
+    border-radius: 16px;
+    padding: 1rem 1.5rem;
+    margin-top: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+.best-algo-icon {
+    font-size: 2rem;
+}
+.best-algo-text h4 {
+    color: #68d391 !important;
+    font-size: 0.8rem !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin: 0 !important;
+}
+.best-algo-text p {
+    color: #e2e8f0;
+    font-size: 1rem;
+    font-weight: 700;
+    margin: 0.2rem 0 0;
+}
+.best-algo-text small {
+    color: #a0aec0;
+    font-size: 0.78rem;
+}
+
 /* Divider */
 hr {
     border: none;
@@ -214,8 +263,8 @@ def load_models():
 
     df.replace({"male": 0, "female": 1}, inplace=True)
 
-    # Drop highly-correlated features (as in notebook)
-    df.drop(["Weight", "Duration"], axis=1, inplace=True)
+    # Keep Duration this time — drop only Weight
+    df.drop(["Weight"], axis=1, inplace=True)
 
     features = df.drop(["User_ID", "Calories"], axis=1)
     target   = df["Calories"].values
@@ -225,8 +274,8 @@ def load_models():
     )
 
     scaler  = StandardScaler()
-    X_train = scaler.fit_transform(X_train)
-    X_val   = scaler.transform(X_val)
+    X_train_sc = scaler.fit_transform(X_train)
+    X_val_sc   = scaler.transform(X_val)
 
     model_dict = {
         "Linear Regression": LinearRegression(),
@@ -236,13 +285,22 @@ def load_models():
         "Ridge":             Ridge(),
     }
 
+    # Train and evaluate each model → pick best by MAE on validation set
+    mae_scores = {}
     for name, m in model_dict.items():
-        m.fit(X_train, Y_train)
+        m.fit(X_train_sc, Y_train)
+        preds = m.predict(X_val_sc)
+        mae_scores[name] = round(mean_absolute_error(Y_val, preds), 3)
 
-    return model_dict, scaler
+    best_algo = min(mae_scores, key=mae_scores.get)
+
+    # Feature order: Gender, Age, Height, Heart_Rate, Body_Temp, Duration
+    feature_cols = list(features.columns)
+
+    return model_dict, scaler, mae_scores, best_algo, feature_cols
 
 
-models, scaler = load_models()
+models, scaler, mae_scores, best_algo, feature_cols = load_models()
 
 
 # ── Hero ──────────────────────────────────────────────────────────────────────
@@ -260,6 +318,28 @@ st.markdown("""
     <span class="badge">Lasso</span>
     <span class="badge">Random Forest</span>
     <span class="badge">Ridge</span>
+</div>
+""", unsafe_allow_html=True)
+
+# ── Best Algorithm Banner ─────────────────────────────────────────────────────
+algo_colors = {
+    "Linear Regression": "#63b3ed",
+    "XGBoost":           "#f6ad55",
+    "Lasso":             "#68d391",
+    "Random Forest":     "#fc8181",
+    "Ridge":             "#b794f4",
+}
+best_color = algo_colors[best_algo]
+best_mae   = mae_scores[best_algo]
+
+st.markdown(f"""
+<div class="best-algo-card">
+    <div class="best-algo-icon">🏆</div>
+    <div class="best-algo-text">
+        <h4>Best Performing Algorithm (on validation set)</h4>
+        <p style="color:{best_color};">{best_algo}</p>
+        <small>Lowest MAE: <strong style="color:{best_color};">{best_mae} kcal</strong> — most accurate on unseen data</small>
+    </div>
 </div>
 """, unsafe_allow_html=True)
 
@@ -307,10 +387,16 @@ with col2:
         help="Body temp during exercise"
     )
 
+    duration = st.slider(
+        "Exercise Duration (minutes)",
+        min_value=1, max_value=120, value=30, step=1,
+        help="How long you exercised"
+    )
+
     algo_choice = st.selectbox(
         "Primary Algorithm",
         list(models.keys()),
-        index=1,
+        index=list(models.keys()).index(best_algo),   # default = best
         help="Algorithm to highlight in the result"
     )
 
@@ -321,8 +407,18 @@ st.markdown('</div>', unsafe_allow_html=True)
 if st.button("⚡ Predict Calories Burned"):
 
     gender_val = 0 if gender == "Male" else 1
-    # Feature order: Gender, Age, Height, Heart_Rate, Body_Temp
-    input_arr = np.array([[gender_val, age, height, heart_rate, body_temp]])
+
+    # Build input in the same column order as training data
+    # feature_cols order is whatever came from df.drop(["User_ID","Calories"])
+    input_map = {
+        "Gender":     gender_val,
+        "Age":        age,
+        "Height":     height,
+        "Heart_Rate": heart_rate,
+        "Body_Temp":  body_temp,
+        "Duration":   duration,
+    }
+    input_arr    = np.array([[input_map[c] for c in feature_cols]])
     input_scaled = scaler.transform(input_arr)
 
     predictions = {}
@@ -345,19 +441,20 @@ if st.button("⚡ Predict Calories Burned"):
     st.markdown('<div class="glass-card" style="margin-top:1.5rem;">', unsafe_allow_html=True)
     st.markdown('<div class="section-label">📊 All Algorithm Predictions</div>', unsafe_allow_html=True)
 
-    algo_colors = {
-        "Linear Regression": "#63b3ed",
-        "XGBoost":           "#f6ad55",
-        "Lasso":             "#68d391",
-        "Random Forest":     "#fc8181",
-        "Ridge":             "#b794f4",
-    }
+    # Sort by prediction value descending for nicer display
+    sorted_preds = sorted(predictions.items(), key=lambda x: x[1], reverse=True)
 
-    for name, val in predictions.items():
-        highlight = "font-weight:800;" if name == algo_choice else ""
+    for name, val in sorted_preds:
+        is_selected = name == algo_choice
+        is_best     = name == best_algo
+        highlight   = "font-weight:800;" if is_selected else ""
+        star        = "★ " if is_selected else ""
+        best_tag    = '<span class="best-badge">🏆 Best</span>' if is_best else ""
+        mae_tag     = f'<span style="color:#718096;font-size:0.75rem;margin-left:0.5rem;">MAE {mae_scores[name]}</span>'
+
         st.markdown(f"""
         <div class="algo-row">
-            <span class="algo-name">{'★ ' if name == algo_choice else ''}{name}</span>
+            <span class="algo-name">{star}{name}{best_tag}{mae_tag}</span>
             <span class="algo-val" style="color:{algo_colors[name]}; {highlight}">{val} kcal</span>
         </div>
         """, unsafe_allow_html=True)
@@ -376,11 +473,12 @@ if st.button("⚡ Predict Calories Burned"):
     st.markdown('<div class="glass-card">', unsafe_allow_html=True)
     st.markdown('<div class="section-label">🧾 Input Summary</div>', unsafe_allow_html=True)
     summary_items = {
-        "Gender": gender,
-        "Age": f"{age} yrs",
-        "Height": f"{height} cm",
+        "Gender":   gender,
+        "Age":      f"{age} yrs",
+        "Height":   f"{height} cm",
         "Heart Rate": f"{heart_rate} bpm",
         "Body Temp": f"{body_temp:.1f} °C",
+        "Duration": f"{duration} min",
     }
     cols = st.columns(len(summary_items))
     for col, (k, v) in zip(cols, summary_items.items()):
