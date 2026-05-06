@@ -3,309 +3,399 @@ import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder, StandardScaler
-from sklearn.metrics import mean_absolute_error
 from sklearn.linear_model import LinearRegression, Lasso, Ridge
 from sklearn.ensemble import RandomForestRegressor
 from xgboost import XGBRegressor
 import warnings
 warnings.filterwarnings("ignore")
 
-# ── Page config ────────────────────────────────────────────────────────────────
+# ── Page config ──────────────────────────────────────────────────────────────
 st.set_page_config(
-    page_title="Calories Burnt Predictor",
-    page_icon="🌸",
+    page_title="CalorieIQ — Burn Predictor",
+    page_icon="🔥",
     layout="centered",
-    initial_sidebar_state="collapsed",
 )
 
-# ── CSS ────────────────────────────────────────────────────────────────────────
+# ── Custom CSS ────────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 
 html, body, [class*="css"] {
-    font-family: 'DM Sans', sans-serif !important;
-    background: linear-gradient(135deg, #fbeaf0 0%, #f4c0d1 40%, #fbeaf0 100%) !important;
-    color: #4b1528;
+    font-family: 'Inter', sans-serif;
 }
 
-#MainMenu, footer, header { visibility: hidden; }
-.block-container { padding-top: 2.5rem; padding-bottom: 2rem; max-width: 780px; }
+/* Dark gradient background */
+.stApp {
+    background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+    min-height: 100vh;
+}
 
-/* Sliders */
-.stSlider > div > div > div       { background: #d4537e !important; }
-.stSlider > div > div > div > div { background: #d4537e !important; }
+/* Hide Streamlit branding */
+#MainMenu, footer, header { visibility: hidden; }
+
+/* Hero banner */
+.hero {
+    text-align: center;
+    padding: 2rem 1rem 1rem;
+}
+.hero h1 {
+    font-size: 3rem;
+    font-weight: 800;
+    background: linear-gradient(90deg, #f093fb, #f5576c, #fda085);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 0.3rem;
+}
+.hero p {
+    color: #a0aec0;
+    font-size: 1.1rem;
+    font-weight: 300;
+}
+
+/* Glass card */
+.glass-card {
+    background: rgba(255, 255, 255, 0.06);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 20px;
+    padding: 2rem;
+    margin: 1rem 0;
+}
+
+/* Section label */
+.section-label {
+    color: #f093fb;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    margin-bottom: 1rem;
+}
+
+/* Custom input labels */
+.stTextInput label, .stSelectbox label, .stSlider label {
+    color: #e2e8f0 !important;
+    font-weight: 500 !important;
+    font-size: 0.9rem !important;
+}
+
+/* Input boxes */
+.stTextInput > div > div > input {
+    background: rgba(255,255,255,0.08) !important;
+    border: 1px solid rgba(255,255,255,0.2) !important;
+    border-radius: 12px !important;
+    color: #fff !important;
+    font-size: 1rem !important;
+    padding: 0.6rem 1rem !important;
+}
+.stTextInput > div > div > input:focus {
+    border-color: #f093fb !important;
+    box-shadow: 0 0 0 2px rgba(240,147,251,0.25) !important;
+}
 
 /* Selectbox */
 .stSelectbox > div > div {
-    background: white !important;
-    border: 1px solid #f4c0d1 !important;
-    border-radius: 10px !important;
+    background: rgba(255,255,255,0.08) !important;
+    border: 1px solid rgba(255,255,255,0.2) !important;
+    border-radius: 12px !important;
+    color: #fff !important;
 }
 
-/* Radio pills */
-div[role="radiogroup"] { gap: 8px !important; flex-wrap: wrap; }
-div[role="radiogroup"] label {
-    background: white !important;
-    border: 1px solid #f4c0d1 !important;
-    border-radius: 20px !important;
-    padding: 4px 14px !important;
-    color: #993556 !important;
-    font-size: 0.85rem !important;
-}
-div[role="radiogroup"] label:has(input:checked) {
-    background: #d4537e !important;
-    color: white !important;
-    border-color: #d4537e !important;
+/* Sliders */
+.stSlider > div > div > div > div {
+    background: linear-gradient(90deg, #f093fb, #f5576c) !important;
 }
 
-/* Button */
+/* Predict button */
 .stButton > button {
-    background: linear-gradient(135deg, #d4537e, #993556) !important;
+    background: linear-gradient(135deg, #f093fb, #f5576c) !important;
     color: white !important;
     border: none !important;
-    border-radius: 12px !important;
-    font-weight: 600 !important;
-    font-size: 1rem !important;
-    padding: 0.7rem 2rem !important;
-    width: 100%;
-    box-shadow: 0 4px 16px rgba(212,83,126,0.35) !important;
-    transition: all 0.2s;
+    border-radius: 14px !important;
+    padding: 0.8rem 2rem !important;
+    font-size: 1.1rem !important;
+    font-weight: 700 !important;
+    width: 100% !important;
+    cursor: pointer !important;
+    transition: all 0.3s ease !important;
+    box-shadow: 0 4px 20px rgba(245, 87, 108, 0.4) !important;
+    letter-spacing: 0.05em !important;
 }
-.stButton > button:hover { transform: translateY(-2px); }
-
-/* Section label */
-.sec-label {
-    font-size: 0.7rem;
-    font-weight: 600;
-    letter-spacing: 2px;
-    text-transform: uppercase;
-    color: #993556;
-    margin-bottom: 0.8rem;
-    border-left: 3px solid #d4537e;
-    padding-left: 8px;
+.stButton > button:hover {
+    transform: translateY(-2px) !important;
+    box-shadow: 0 8px 30px rgba(245, 87, 108, 0.6) !important;
 }
 
 /* Result card */
-.result-wrap {
-    background: linear-gradient(135deg, #fbeaf0, #f4c0d1);
-    border: 1px solid #ed93b1;
-    border-radius: 18px;
+.result-card {
+    background: linear-gradient(135deg, rgba(240,147,251,0.15), rgba(245,87,108,0.15));
+    border: 1px solid rgba(240,147,251,0.4);
+    border-radius: 20px;
     padding: 2rem;
     text-align: center;
+    margin-top: 1.5rem;
 }
-.result-num  { font-size: 5rem; font-weight: 600; color: #72243e; line-height: 1; }
-.result-unit { font-size: 0.9rem; color: #993556; font-family: 'DM Mono', monospace; margin-top: 4px; }
-.result-algo { font-size: 0.75rem; margin-top: 10px; background: white;
-               display: inline-block; padding: 3px 12px; border-radius: 20px;
-               border: 1px solid #f4c0d1; color: #4b1528; }
-
-/* Metric cards */
-.metric-card {
-    background: white;
-    border: 1px solid #f4c0d1;
-    border-radius: 14px;
-    padding: 1rem;
-    text-align: center;
+.result-cal {
+    font-size: 4rem;
+    font-weight: 800;
+    background: linear-gradient(90deg, #f093fb, #f5576c, #fda085);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    line-height: 1;
 }
-.metric-val { font-size: 1.6rem; font-weight: 600; color: #72243e; }
-.metric-lbl { font-size: 0.7rem; color: #993556; font-family: 'DM Mono', monospace;
-              letter-spacing: 1px; text-transform: uppercase; margin-top: 4px; }
+.result-unit {
+    color: #a0aec0;
+    font-size: 1rem;
+    margin-top: 0.3rem;
+}
+.result-label {
+    color: #e2e8f0;
+    font-size: 0.9rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
 
-/* Context rows */
-.ctx-row {
+/* Algorithm comparison */
+.algo-row {
     display: flex;
-    align-items: center;
     justify-content: space-between;
-    padding: 8px 0;
-    border-bottom: 1px solid #fbeaf0;
-    font-size: 0.85rem;
+    align-items: center;
+    padding: 0.6rem 0;
+    border-bottom: 1px solid rgba(255,255,255,0.07);
+}
+.algo-name {
+    color: #cbd5e0;
+    font-size: 0.88rem;
+    font-weight: 500;
+}
+.algo-val {
+    font-size: 0.95rem;
+    font-weight: 700;
 }
 
-/* Performance table - keep streamlit default dark-ish but override header */
-.stDataFrame thead tr th {
-    background: #fbeaf0 !important;
-    color: #4b1528 !important;
+/* Divider */
+hr {
+    border: none;
+    border-top: 1px solid rgba(255,255,255,0.1);
+    margin: 1.5rem 0;
+}
+
+/* Info badges */
+.badge {
+    display: inline-block;
+    background: rgba(240,147,251,0.15);
+    border: 1px solid rgba(240,147,251,0.3);
+    color: #f093fb;
+    border-radius: 20px;
+    padding: 0.2rem 0.8rem;
+    font-size: 0.78rem;
+    font-weight: 600;
+    margin: 0.2rem;
+}
+
+/* Column headers */
+h3 {
+    color: #e2e8f0 !important;
+    font-weight: 700 !important;
 }
 </style>
 """, unsafe_allow_html=True)
 
 
-# ── Train models ───────────────────────────────────────────────────────────────
-@st.cache_data
-def load_and_train():
-    exercise = pd.read_csv("exercise.csv")
-    calories = pd.read_csv("calories.csv")
-    df = exercise.merge(calories, on="User_ID")
+# ── Data & Model Loading ──────────────────────────────────────────────────────
+@st.cache_resource(show_spinner="Training models on dataset…")
+def load_models():
+    df_cal  = pd.read_csv("calories.csv")
+    df_exer = pd.read_csv("exercise.csv")
+    df = pd.merge(df_cal, df_exer, on="User_ID")
 
-    le = LabelEncoder()
-    df["Gender"] = le.fit_transform(df["Gender"])
+    df.replace({"male": 0, "female": 1}, inplace=True)
 
-    features = df[["Gender", "Age", "Height", "Weight", "Duration", "Heart_Rate", "Body_Temp"]]
+    # Drop highly-correlated features (as in notebook)
+    df.drop(["Weight", "Duration"], axis=1, inplace=True)
+
+    features = df.drop(["User_ID", "Calories"], axis=1)
     target   = df["Calories"].values
 
     X_train, X_val, Y_train, Y_val = train_test_split(
         features, target, test_size=0.1, random_state=22
     )
-    scaler    = StandardScaler()
-    X_train_s = scaler.fit_transform(X_train)
-    X_val_s   = scaler.transform(X_val)
 
-    model_defs = {
-        "XGBoost":           XGBRegressor(random_state=42),
-        "Random Forest":     RandomForestRegressor(random_state=42),
+    scaler  = StandardScaler()
+    X_train = scaler.fit_transform(X_train)
+    X_val   = scaler.transform(X_val)
+
+    model_dict = {
         "Linear Regression": LinearRegression(),
+        "XGBoost":           XGBRegressor(verbosity=0),
         "Lasso":             Lasso(),
+        "Random Forest":     RandomForestRegressor(n_estimators=100, random_state=42),
         "Ridge":             Ridge(),
     }
-    fitted, perf = {}, {}
-    for name, mdl in model_defs.items():
-        mdl.fit(X_train_s, Y_train)
-        perf[name] = {
-            "train_mae": round(mean_absolute_error(Y_train, mdl.predict(X_train_s)), 2),
-            "val_mae":   round(mean_absolute_error(Y_val,   mdl.predict(X_val_s)),   2),
-        }
-        fitted[name] = mdl
 
-    return fitted, perf, scaler
+    for name, m in model_dict.items():
+        m.fit(X_train, Y_train)
+
+    return model_dict, scaler
 
 
-models, perf, scaler = load_and_train()
+models, scaler = load_models()
 
-# ── Header ─────────────────────────────────────────────────────────────────────
+
+# ── Hero ──────────────────────────────────────────────────────────────────────
 st.markdown("""
-<div style="text-align:center; margin-bottom:1.8rem;">
-  <div style="font-size:2.4rem; font-weight:600; color:#4b1528; letter-spacing:-1px;">
-    🌸 Calories Burnt Predictor
-  </div>
-  <div style="font-size:0.85rem; color:#993556; font-family:'DM Mono',monospace; margin-top:6px;">
-    Enter your data · choose an algorithm · press predict
-  </div>
+<div class="hero">
+    <h1>🔥 CalorieIQ</h1>
+    <p>Predict how many calories you'll burn — powered by 5 ML algorithms</p>
 </div>
 """, unsafe_allow_html=True)
 
-# ── Input form ─────────────────────────────────────────────────────────────────
-st.markdown('<div class="sec-label">Your Profile & Exercise Data</div>', unsafe_allow_html=True)
+st.markdown("""
+<div style="text-align:center; margin-bottom:1.5rem;">
+    <span class="badge">Linear Regression</span>
+    <span class="badge">XGBoost</span>
+    <span class="badge">Lasso</span>
+    <span class="badge">Random Forest</span>
+    <span class="badge">Ridge</span>
+</div>
+""", unsafe_allow_html=True)
+
+
+# ── Input Form ────────────────────────────────────────────────────────────────
+st.markdown('<div class="glass-card">', unsafe_allow_html=True)
+st.markdown('<div class="section-label">📝 Your Profile & Exercise Data</div>', unsafe_allow_html=True)
 
 col1, col2 = st.columns(2)
+
 with col1:
-    gender     = st.selectbox("Gender", ["Male", "Female"])
-    height     = st.slider("Height (cm)", 140, 210, 170)
-    weight     = st.slider("Weight (kg)", 40, 150, 70)
-    duration   = st.slider("Duration (min)", 1, 120, 30)
+    gender = st.selectbox("Gender", ["Male", "Female"], help="Biological sex")
+
+    age_input = st.text_input("Age (years)", value="25", help="Type your age")
+    try:
+        age = int(age_input)
+        if not (1 <= age <= 120):
+            st.warning("Age should be between 1 and 120.")
+            age = 25
+    except ValueError:
+        st.error("Please enter a valid number for Age.")
+        age = 25
+
+    height_input = st.text_input("Height (cm)", value="170", help="Type your height in cm")
+    try:
+        height = float(height_input)
+        if not (100 <= height <= 250):
+            st.warning("Height should be between 100 and 250 cm.")
+            height = 170.0
+    except ValueError:
+        st.error("Please enter a valid number for Height.")
+        height = 170.0
+
 with col2:
-    age        = st.slider("Age (years)", 15, 80, 30)
-    heart_rate = st.slider("Heart Rate (bpm)", 60, 200, 100)
-    body_temp  = st.slider("Body Temperature (°C)", 36.0, 42.0, 39.0, step=0.1)
+    heart_rate = st.slider(
+        "Heart Rate (bpm)",
+        min_value=60, max_value=180, value=100, step=1,
+        help="Average heart rate during exercise"
+    )
 
-st.markdown("<br>", unsafe_allow_html=True)
-st.markdown('<div class="sec-label">Choose Algorithm</div>', unsafe_allow_html=True)
-selected = st.radio("", list(models.keys()), horizontal=True, label_visibility="collapsed")
+    body_temp = st.slider(
+        "Body Temperature (°C)",
+        min_value=37.0, max_value=42.0, value=40.0, step=0.1,
+        format="%.1f",
+        help="Body temp during exercise"
+    )
 
-st.markdown("<br>", unsafe_allow_html=True)
-predict_clicked = st.button("🌸  Predict Calories Burned")
+    algo_choice = st.selectbox(
+        "Primary Algorithm",
+        list(models.keys()),
+        index=1,
+        help="Algorithm to highlight in the result"
+    )
 
-# ── Only show results after button click ───────────────────────────────────────
-if predict_clicked:
+st.markdown('</div>', unsafe_allow_html=True)
 
-    gender_enc  = 1 if gender == "Male" else 0
-    user_input  = np.array([[gender_enc, age, height, weight, duration, heart_rate, body_temp]])
-    user_scaled = scaler.transform(user_input)
 
-    prediction = max(0.0, float(models[selected].predict(user_scaled)[0]))
-    all_preds  = {n: max(0.0, float(m.predict(user_scaled)[0])) for n, m in models.items()}
+# ── Prediction ────────────────────────────────────────────────────────────────
+if st.button("⚡ Predict Calories Burned"):
 
-    # ── Result card ────────────────────────────────────────────────────────────
-    st.markdown("<br>", unsafe_allow_html=True)
+    gender_val = 0 if gender == "Male" else 1
+    # Feature order: Gender, Age, Height, Heart_Rate, Body_Temp
+    input_arr = np.array([[gender_val, age, height, heart_rate, body_temp]])
+    input_scaled = scaler.transform(input_arr)
+
+    predictions = {}
+    for name, model in models.items():
+        pred = model.predict(input_scaled)[0]
+        predictions[name] = max(0.0, round(pred, 1))
+
+    primary_pred = predictions[algo_choice]
+
+    # ── Result display ──────────────────────────────────────────────────────
     st.markdown(f"""
-    <div class="result-wrap">
-        <div style="font-size:0.72rem;color:#993556;font-family:'DM Mono',monospace;
-                    letter-spacing:2px;text-transform:uppercase;margin-bottom:8px;">
-            Estimated Burn
+    <div class="result-card">
+        <div class="result-label">Estimated Calories Burned</div>
+        <div class="result-cal">{primary_pred}</div>
+        <div class="result-unit">kcal &nbsp;·&nbsp; {algo_choice}</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # ── All algorithms comparison ────────────────────────────────────────────
+    st.markdown('<div class="glass-card" style="margin-top:1.5rem;">', unsafe_allow_html=True)
+    st.markdown('<div class="section-label">📊 All Algorithm Predictions</div>', unsafe_allow_html=True)
+
+    algo_colors = {
+        "Linear Regression": "#63b3ed",
+        "XGBoost":           "#f6ad55",
+        "Lasso":             "#68d391",
+        "Random Forest":     "#fc8181",
+        "Ridge":             "#b794f4",
+    }
+
+    for name, val in predictions.items():
+        highlight = "font-weight:800;" if name == algo_choice else ""
+        st.markdown(f"""
+        <div class="algo-row">
+            <span class="algo-name">{'★ ' if name == algo_choice else ''}{name}</span>
+            <span class="algo-val" style="color:{algo_colors[name]}; {highlight}">{val} kcal</span>
         </div>
-        <div class="result-num">{prediction:.0f}</div>
-        <div class="result-unit">kilocalories</div>
-        <div class="result-algo">via {selected}</div>
-    </div>
-    """, unsafe_allow_html=True)
+        """, unsafe_allow_html=True)
 
-    # BMI
-    bmi     = weight / ((height / 100) ** 2)
-    bmi_cat = ("Underweight" if bmi < 18.5 else
-                "Normal weight" if bmi < 25 else
-                "Overweight"   if bmi < 30 else "Obese")
-    bmi_col = "#3b6d11" if bmi < 25 else "#ba7517" if bmi < 30 else "#a32d2d"
-    bmi_bg  = "#eaf3de" if bmi < 25 else "#faeeda" if bmi < 30 else "#fcebeb"
+    avg_pred = round(np.mean(list(predictions.values())), 1)
     st.markdown(f"""
-    <div style="text-align:center;margin-top:10px;font-size:0.85rem;color:#72243e;">
-        BMI: <strong>{bmi:.1f}</strong>
-        <span style="background:{bmi_bg};color:{bmi_col};padding:2px 10px;
-                     border-radius:20px;font-size:0.75rem;margin-left:6px;">
-            {bmi_cat}
-        </span>
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:0.8rem 0 0;">
+        <span style="color:#f093fb;font-weight:700;font-size:0.9rem;">🔥 Ensemble Average</span>
+        <span style="color:#f093fb;font-weight:800;font-size:1.05rem;">{avg_pred} kcal</span>
     </div>
     """, unsafe_allow_html=True)
 
-    # ── Caloric context ────────────────────────────────────────────────────────
-    st.markdown("<br>", unsafe_allow_html=True)
-    st.markdown('<div class="sec-label">Caloric Context</div>', unsafe_allow_html=True)
-    benchmarks = [
-        ("🍎", "Apple", 95),
-        ("🍕", "Pizza slice", 285),
-        ("🍔", "Hamburger", 550),
-        ("🏃", "30-min run avg", 300),
-        ("🥤", "Can of soda", 150),
-    ]
-    ctx_html = ""
-    for icon, label, val in benchmarks:
-        ok   = prediction >= val
-        diff = abs(prediction - val)
-        bg   = "#eaf3de" if ok else "#fbeaf0"
-        fg   = "#3b6d11" if ok else "#993556"
-        txt  = "covered ✓" if ok else f"{diff:.0f} kcal short"
-        ctx_html += f"""
-        <div class="ctx-row">
-            <span>{icon} {label}
-                <span style="color:#993556;font-family:'DM Mono',monospace;font-size:0.75rem;margin-left:6px;">{val} kcal</span>
-            </span>
-            <span style="background:{bg};color:{fg};padding:2px 10px;border-radius:10px;font-size:0.75rem;">{txt}</span>
-        </div>"""
-    st.markdown(ctx_html, unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
 
-    # ── Performance table ──────────────────────────────────────────────────────
-    st.markdown("<br>", unsafe_allow_html=True)
-    st.markdown('<div class="sec-label">Performance Summary</div>', unsafe_allow_html=True)
-    table = []
-    for n in models.keys():
-        table.append({
-            "Algorithm":  ("✦ " if n == selected else "   ") + n,
-            "Train MAE":  f"{perf[n]['train_mae']:.2f}",
-            "Val MAE":    f"{perf[n]['val_mae']:.2f}",
-            "Prediction": f"{all_preds[n]:.0f} kcal",
-        })
-    st.dataframe(pd.DataFrame(table), use_container_width=True, hide_index=True)
+    # ── Input summary ────────────────────────────────────────────────────────
+    st.markdown('<div class="glass-card">', unsafe_allow_html=True)
+    st.markdown('<div class="section-label">🧾 Input Summary</div>', unsafe_allow_html=True)
+    summary_items = {
+        "Gender": gender,
+        "Age": f"{age} yrs",
+        "Height": f"{height} cm",
+        "Heart Rate": f"{heart_rate} bpm",
+        "Body Temp": f"{body_temp:.1f} °C",
+    }
+    cols = st.columns(len(summary_items))
+    for col, (k, v) in zip(cols, summary_items.items()):
+        col.markdown(f"""
+        <div style="text-align:center;">
+            <div style="color:#a0aec0;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.08em;">{k}</div>
+            <div style="color:#e2e8f0;font-size:1rem;font-weight:700;margin-top:0.2rem;">{v}</div>
+        </div>
+        """, unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
 
-    # ── Stats row ──────────────────────────────────────────────────────────────
-    st.markdown("<br>", unsafe_allow_html=True)
-    cols = st.columns(5)
-    stats = [
-        (f"{prediction:.0f}", "kcal Predicted"),
-        (f"{bmi:.1f}",        f"BMI · {bmi_cat}"),
-        (f"{duration} min",   "Duration"),
-        (f"{heart_rate} bpm", "Heart Rate"),
-        (f"{body_temp}°C",    "Body Temp"),
-    ]
-    for col, (val, lbl) in zip(cols, stats):
-        with col:
-            st.markdown(f"""
-            <div class="metric-card">
-                <div class="metric-val">{val}</div>
-                <div class="metric-lbl">{lbl}</div>
-            </div>""", unsafe_allow_html=True)
 
-    st.markdown("""
-    <div style="text-align:center;margin-top:2rem;color:#993556;font-size:0.7rem;
-                font-family:'DM Mono',monospace;letter-spacing:1px;">
-        🌸 trained on 15,000 exercise sessions · 5 algorithms compared
-    </div>
-    """, unsafe_allow_html=True)
+# ── Footer ────────────────────────────────────────────────────────────────────
+st.markdown("""
+<div style="text-align:center;color:#4a5568;font-size:0.78rem;margin-top:2rem;padding-bottom:1rem;">
+    Built with Streamlit · Scikit-learn · XGBoost &nbsp;|&nbsp; 15,000 samples dataset
+</div>
+""", unsafe_allow_html=True)
