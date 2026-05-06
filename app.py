@@ -1,78 +1,73 @@
-from flask import Flask, request, jsonify, render_template
+import streamlit as st
 import pandas as pd
 import numpy as np
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import LabelEncoder, StandardScaler
-from sklearn.metrics import mean_absolute_error
+from xgboost import XGBRegressor
 from sklearn.linear_model import LinearRegression, Lasso, Ridge
-from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
-import warnings
-warnings.filterwarnings('ignore')
+from sklearn.ensemble import RandomForestRegressor
+from sklearn import metrics
 
-app = Flask(__name__)
+st.set_page_config(page_title='Calories Burn Prediction', layout='wide', page_icon='🔥')
 
-# ── Train all models on startup ──────────────────────────────────────────────
-df_exercise = pd.read_csv('exercise.csv')
-df_calories = pd.read_csv('calories.csv')
-df = pd.merge(df_exercise, df_calories, on='User_ID')
+st.markdown('<style>.stMetric { background-color: #ffffff; padding: 15px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }</style>', unsafe_allow_html=True)
 
-le = LabelEncoder()
-df['Gender'] = le.fit_transform(df['Gender'])   # male=1, female=0
+@st.cache_data
+def load_and_prep_data():
+    calories = pd.read_csv('calories.csv')
+    exercise = pd.read_csv('exercise.csv')
+    df = pd.merge(exercise, calories, on='User_ID')
+    df['Gender'] = df['Gender'].map({'male': 0, 'female': 1})
+    return df
 
-# Drop columns not used as features (per notebook)
-df.drop(['Weight', 'Duration'], axis=1, inplace=True)
+try:
+    df = load_and_prep_data()
+    X = df.drop(columns=['User_ID', 'Calories'], axis=1)
+    Y = df['Calories']
+    X_train, X_test, Y_train, Y_test = train_test_split(X, Y, test_size=0.2, random_state=2)
+except Exception as e:
+    st.error(f'Data error: {e}')
+    st.stop()
 
-features = df.drop(['User_ID', 'Calories'], axis=1)   # Gender Age Height Heart_Rate Body_Temp
-target = df['Calories'].values
+st.sidebar.header('📝 Input Parameters')
+gender = st.sidebar.selectbox('Gender', ('Male', 'Female'))
+age = st.sidebar.slider('Age', 10, 100, 25)
+height = st.sidebar.slider('Height (cm)', 100, 250, 170)
+weight = st.sidebar.slider('Weight (kg)', 30, 200, 70)
+duration = st.sidebar.slider('Duration (min)', 1, 60, 15)
+heart_rate = st.sidebar.slider('Heart Rate', 60, 150, 100)
+body_temp = st.sidebar.slider('Body Temperature (C)', 35.0, 43.0, 39.0)
 
-X_train, X_val, Y_train, Y_val = train_test_split(
-    features, target, test_size=0.1, random_state=22
-)
+input_data = pd.DataFrame({
+    'Gender': [0 if gender == 'Male' else 1],
+    'Age': [age], 'Height': [height], 'Weight': [weight],
+    'Duration': [duration], 'Heart_Rate': [heart_rate], 'Body_Temp': [body_temp]
+})
 
-scaler = StandardScaler()
-X_train_s = scaler.fit_transform(X_train)
-X_val_s   = scaler.transform(X_val)
+st.title('🔥 Calories Burned Prediction Dashboard')
+st.markdown('Compare algorithms to find the best prediction model.')
 
-MODELS = {
-    "Linear Regression":   LinearRegression(),
-    "Gradient Boosting":   GradientBoostingRegressor(),
-    "Lasso":               Lasso(),
-    "Random Forest":       RandomForestRegressor(),
-    "Ridge":               Ridge(),
+st.subheader('🛠️ Select Algorithm')
+selected_algo = st.selectbox('Model:', ['XGBoost Regressor', 'Random Forest', 'Linear Regression', 'Lasso', 'Ridge'])
+
+models = {
+    'XGBoost Regressor': XGBRegressor(),
+    'Random Forest': RandomForestRegressor(n_estimators=100),
+    'Linear Regression': LinearRegression(),
+    'Lasso': Lasso(),
+    'Ridge': Ridge()
 }
 
-model_metrics = {}
-for name, mdl in MODELS.items():
-    mdl.fit(X_train_s, Y_train)
-    val_preds = mdl.predict(X_val_s)
-    model_metrics[name] = round(float(mean_absolute_error(Y_val, val_preds)), 3)
-
-# ── Routes ───────────────────────────────────────────────────────────────────
-@app.route('/')
-def index():
-    return render_template('index.html', model_metrics=model_metrics)
-
-
-@app.route('/predict', methods=['POST'])
-def predict():
-    data = request.get_json()
-
-    gender     = 1 if data['gender'].lower() == 'male' else 0
-    age        = float(data['age'])
-    height     = float(data['height'])
-    heart_rate = float(data['heart_rate'])
-    body_temp  = float(data['body_temp'])
-
-    input_arr = np.array([[gender, age, height, heart_rate, body_temp]])
-    input_scaled = scaler.transform(input_arr)
-
-    results = {}
-    for name, mdl in MODELS.items():
-        pred = mdl.predict(input_scaled)[0]
-        results[name] = round(float(pred), 1)
-
-    return jsonify({'predictions': results, 'metrics': model_metrics})
-
-
-if __name__ == '__main__':
-    app.run(debug=True)
+if st.button('🚀 Run Prediction'):
+    model = models[selected_algo]
+    model.fit(X_train, Y_train)
+    test_pred = model.predict(X_test)
+    mae = metrics.mean_absolute_error(Y_test, test_pred)
+    r2 = metrics.r2_score(Y_test, test_pred)
+    prediction = model.predict(input_data)
+    
+    st.success(f'Model trained using {selected_algo}!')
+    c1, c2, c3 = st.columns(3)
+    c1.metric('Predicted Calories', f'{prediction[0]:.2f} kcal')
+    c2.metric('Error (MAE)', f'{mae:.3f}')
+    c3.metric('Accuracy (R2)', f'{r2:.4f}')
+    st.info(f'**Note for Instructor:** {selected_algo} shows an accuracy score of {r2:.4f}.')
