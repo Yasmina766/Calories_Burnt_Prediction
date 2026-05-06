@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Calories Burnt Predictor</title>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;600&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --bg:        #0d0f14;
+      --panel:     #151820;
+      --border:    #252a36;
+      --accent:    #f97316;
+      --accent2:   #fb923c;
+      --text:      #e8eaf0;
+      --muted:     #6b7280;
+      --success:   #22c55e;
+      --card-bg:   #1a1e2a;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'DM Sans', sans-serif;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ── Noise overlay ── */
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+      pointer-events: none; z-index: 0; opacity: 0.4;
+    }
+
+    .wrapper {
+      position: relative; z-index: 1;
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 48px 24px 80px;
+    }
+
+    /* ── Header ── */
+    header {
+      text-align: center;
+      margin-bottom: 52px;
+    }
+    .pill {
+      display: inline-block;
+      background: rgba(249,115,22,.12);
+      border: 1px solid rgba(249,115,22,.3);
+      color: var(--accent);
+      font-family: 'Space Mono', monospace;
+      font-size: 11px;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      padding: 5px 14px;
+      border-radius: 100px;
+      margin-bottom: 20px;
+    }
+    h1 {
+      font-family: 'Space Mono', monospace;
+      font-size: clamp(28px, 5vw, 46px);
+      font-weight: 700;
+      line-height: 1.1;
+      letter-spacing: -1px;
+    }
+    h1 span { color: var(--accent); }
+    .subtitle {
+      margin-top: 14px;
+      color: var(--muted);
+      font-size: 15px;
+      font-weight: 300;
+      max-width: 460px;
+      margin-inline: auto;
+      line-height: 1.6;
+    }
+
+    /* ── Layout ── */
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+    }
+    @media (max-width: 680px) { .grid { grid-template-columns: 1fr; } }
+
+    /* ── Form card ── */
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 28px 28px 32px;
+    }
+    .card-title {
+      font-family: 'Space Mono', monospace;
+      font-size: 12px;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 24px;
+    }
+
+    /* ── Inputs ── */
+    .field { margin-bottom: 18px; }
+    label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+    input[type=number], select {
+      width: 100%;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--text);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 15px;
+      padding: 11px 14px;
+      outline: none;
+      transition: border-color .2s, box-shadow .2s;
+      appearance: none;
+      -webkit-appearance: none;
+    }
+    input[type=number]:focus, select:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(249,115,22,.15);
+    }
+    input[type=number]::placeholder { color: var(--muted); }
+
+    /* gender toggle */
+    .gender-toggle {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .gender-btn {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--muted);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 14px;
+      font-weight: 600;
+      padding: 11px;
+      cursor: pointer;
+      transition: all .2s;
+      text-align: center;
+    }
+    .gender-btn.active {
+      background: rgba(249,115,22,.15);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+    .gender-btn:hover:not(.active) { border-color: #3a3f4f; color: var(--text); }
+
+    /* predict button */
+    .btn-predict {
+      width: 100%;
+      margin-top: 8px;
+      background: var(--accent);
+      border: none;
+      border-radius: 10px;
+      color: #fff;
+      font-family: 'Space Mono', monospace;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: .08em;
+      padding: 14px;
+      cursor: pointer;
+      transition: background .2s, transform .12s;
+    }
+    .btn-predict:hover  { background: var(--accent2); }
+    .btn-predict:active { transform: scale(0.98); }
+    .btn-predict:disabled { opacity: .5; cursor: not-allowed; }
+
+    /* ── Results panel ── */
+    .results-panel { display: flex; flex-direction: column; gap: 12px; }
+
+    .algo-card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      transition: border-color .3s, transform .2s;
+      opacity: .45;
+    }
+    .algo-card.has-result { opacity: 1; }
+    .algo-card.best-model {
+      border-color: var(--accent);
+      background: rgba(249,115,22,.06);
+    }
+    .algo-card.best-model .algo-name::after {
+      content: ' ★';
+      color: var(--accent);
+      font-size: 11px;
+    }
+    .algo-name {
+      font-size: 13px;
+      font-weight: 600;
+      flex: 1;
+    }
+    .algo-meta {
+      font-family: 'Space Mono', monospace;
+      font-size: 10px;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+    .algo-cal {
+      font-family: 'Space Mono', monospace;
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--accent);
+      min-width: 70px;
+      text-align: right;
+    }
+    .algo-cal .unit {
+      font-size: 11px;
+      font-weight: 400;
+      color: var(--muted);
+    }
+
+    /* bar under algo */
+    .bar-wrap {
+      width: 100%; height: 3px;
+      background: var(--border);
+      border-radius: 2px;
+      margin-top: 10px;
+      overflow: hidden;
+    }
+    .bar-fill {
+      height: 100%;
+      background: var(--accent);
+      border-radius: 2px;
+      width: 0%;
+      transition: width .8s cubic-bezier(.4,0,.2,1);
+    }
+
+    /* ── Hero number ── */
+    .hero-result {
+      background: linear-gradient(135deg, rgba(249,115,22,.12), rgba(249,115,22,.04));
+      border: 1px solid rgba(249,115,22,.3);
+      border-radius: 16px;
+      padding: 28px;
+      text-align: center;
+      margin-bottom: 24px;
+      display: none;
+    }
+    .hero-result.visible { display: block; animation: fadeUp .4s ease; }
+    .hero-label { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; font-weight: 600; }
+    .hero-num {
+      font-family: 'Space Mono', monospace;
+      font-size: 56px;
+      font-weight: 700;
+      color: var(--accent);
+      line-height: 1;
+    }
+    .hero-unit { font-size: 16px; color: var(--muted); margin-top: 4px; }
+
+    /* loading spinner */
+    .spinner {
+      width: 18px; height: 18px;
+      border: 2px solid rgba(255,255,255,.2);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+      display: inline-block; vertical-align: middle; margin-right: 8px;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(10px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ── Footer ── */
+    footer {
+      text-align: center;
+      margin-top: 60px;
+      color: var(--muted);
+      font-size: 12px;
+      font-family: 'Space Mono', monospace;
+    }
+  </style>
+</head>
+<body>
+<div class="wrapper">
+
+  <!-- Header -->
+  <header>
+    <div class="pill">Machine Learning · 5 Algorithms</div>
+    <h1>Calories Burnt<br><span>Predictor</span></h1>
+    <p class="subtitle">Enter your biometrics and get instant calorie-burn estimates across five ML models side by side.</p>
+  </header>
+
+  <div class="grid">
+
+    <!-- ── INPUT FORM ── -->
+    <div class="card">
+      <p class="card-title">Your Biometrics</p>
+
+      <!-- Gender -->
+      <div class="field">
+        <label>Gender</label>
+        <div class="gender-toggle">
+          <button class="gender-btn active" id="btn-male"   onclick="setGender('male')">♂ Male</button>
+          <button class="gender-btn"        id="btn-female" onclick="setGender('female')">♀ Female</button>
+        </div>
+      </div>
+
+      <!-- Age -->
+      <div class="field">
+        <label>Age <span style="color:var(--muted);font-weight:300">(years)</span></label>
+        <input type="number" id="age" placeholder="e.g. 28" min="10" max="100"/>
+      </div>
+
+      <!-- Height -->
+      <div class="field">
+        <label>Height <span style="color:var(--muted);font-weight:300">(cm)</span></label>
+        <input type="number" id="height" placeholder="e.g. 175" min="100" max="230"/>
+      </div>
+
+      <!-- Heart Rate -->
+      <div class="field">
+        <label>Heart Rate <span style="color:var(--muted);font-weight:300">(bpm)</span></label>
+        <input type="number" id="heart_rate" placeholder="e.g. 95" min="50" max="200"/>
+      </div>
+
+      <!-- Body Temp -->
+      <div class="field">
+        <label>Body Temperature <span style="color:var(--muted);font-weight:300">(°C)</span></label>
+        <input type="number" id="body_temp" placeholder="e.g. 39.5" step="0.1" min="36" max="42"/>
+      </div>
+
+      <button class="btn-predict" id="predict-btn" onclick="predict()">
+        Predict Calories Burnt
+      </button>
+    </div>
+
+    <!-- ── RESULTS ── -->
+    <div>
+      <!-- Hero -->
+      <div class="hero-result" id="hero">
+        <div class="hero-label">Best Model Prediction</div>
+        <div class="hero-num" id="hero-num">—</div>
+        <div class="hero-unit">calories burned</div>
+      </div>
+
+      <!-- Per-algo cards -->
+      <div class="results-panel" id="results-panel">
+        {% set algos = [
+          ("Linear Regression", "metrics['Linear Regression']"),
+          ("Gradient Boosting",  "metrics['Gradient Boosting']"),
+          ("Lasso",             "metrics['Lasso']"),
+          ("Random Forest",     "metrics['Random Forest']"),
+          ("Ridge",             "metrics['Ridge']")
+        ] %}
+
+        {% for name, _ in algos %}
+        <div class="algo-card" id="card-{{ loop.index0 }}" data-name="{{ name }}">
+          <div>
+            <div class="algo-name">{{ name }}</div>
+            <div class="algo-meta">
+              Val MAE: {{ model_metrics[name] }} kcal
+            </div>
+            <div class="bar-wrap"><div class="bar-fill" id="bar-{{ loop.index0 }}"></div></div>
+          </div>
+          <div class="algo-cal" id="pred-{{ loop.index0 }}">—<span class="unit"></span></div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
+  </div><!-- /grid -->
+
+  <footer>Trained on {{ "{:,}".format(15000) }} exercise records · Random Forest &amp; XGBoost top performers</footer>
+
+</div><!-- /wrapper -->
+
+<script>
+  const ALGO_ORDER = ["Linear Regression","Gradient Boosting","Lasso","Random Forest","Ridge"];
+  let selectedGender = 'male';
+
+  function setGender(g) {
+    selectedGender = g;
+    document.getElementById('btn-male').classList.toggle('active', g === 'male');
+    document.getElementById('btn-female').classList.toggle('active', g === 'female');
+  }
+
+  async function predict() {
+    const age        = document.getElementById('age').value;
+    const height     = document.getElementById('height').value;
+    const heart_rate = document.getElementById('heart_rate').value;
+    const body_temp  = document.getElementById('body_temp').value;
+
+    if (!age || !height || !heart_rate || !body_temp) {
+      alert('Please fill in all fields.');
+      return;
+    }
+
+    const btn = document.getElementById('predict-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> Predicting…';
+
+    try {
+      const resp = await fetch('/predict', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          gender: selectedGender,
+          age, height, heart_rate, body_temp
+        })
+      });
+      const data = await resp.json();
+      renderResults(data.predictions, data.metrics);
+    } catch(e) {
+      alert('Error: ' + e.message);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Predict Calories Burnt';
+    }
+  }
+
+  function renderResults(predictions, metrics) {
+    // Find best model (lowest MAE)
+    const bestModel = Object.entries(metrics).sort((a,b) => a[1]-b[1])[0][0];
+    const maxPred   = Math.max(...Object.values(predictions));
+
+    ALGO_ORDER.forEach((name, i) => {
+      const card = document.getElementById(`card-${i}`);
+      const predEl = document.getElementById(`pred-${i}`);
+      const barEl  = document.getElementById(`bar-${i}`);
+      const val = predictions[name];
+
+      card.classList.add('has-result');
+      card.classList.toggle('best-model', name === bestModel);
+      predEl.innerHTML = `${val}<span class="unit"> kcal</span>`;
+
+      // Animate bar proportionally
+      setTimeout(() => {
+        barEl.style.width = ((val / maxPred) * 100) + '%';
+      }, 80 * i);
+    });
+
+    // Hero card
+    const hero = document.getElementById('hero');
+    document.getElementById('hero-num').textContent = predictions[bestModel];
+    hero.classList.add('visible');
+  }
+</script>
+</body>
+</html>
