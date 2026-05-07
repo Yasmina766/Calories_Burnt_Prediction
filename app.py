@@ -257,13 +257,11 @@ h3 {
 # ── Data & Model Loading ──────────────────────────────────────────────────────
 @st.cache_resource(show_spinner="Training models on dataset…")
 def load_models():
-    df_cal  = pd.read_csv("calories.csv")
-    df_exer = pd.read_csv("exercise.csv")
-    df = pd.merge(df_cal, df_exer, on="User_ID")
+    df = pd.read_csv("calories.csv")
 
     df.replace({"male": 0, "female": 1}, inplace=True)
 
-    # Keep Duration this time — drop only Weight
+    # Drop Weight and User_ID, keep all other features
     df.drop(["Weight"], axis=1, inplace=True)
 
     features = df.drop(["User_ID", "Calories"], axis=1)
