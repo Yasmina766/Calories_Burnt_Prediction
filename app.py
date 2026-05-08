@@ -261,7 +261,7 @@ def load_models():
 
     df.replace({"male": 0, "female": 1}, inplace=True)
 
-    # Drop Weight and User_ID, keep all other features
+    # Drop Weight (not entered by user), keep Duration and all other features
     df.drop(["Weight"], axis=1, inplace=True)
 
     features = df.drop(["User_ID", "Calories"], axis=1)
